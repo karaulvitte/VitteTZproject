@@ -700,3 +700,68 @@ tfidf_vectorizer = TfidfVectorizer(
 tfidf_matrix = tfidf_vectorizer.fit_transform(chunk_texts)
 
 print("Форма TF–IDF-матрицы:", tfidf_matrix.shape)
+
+# ============================================================
+# Параметры:
+#  - query_text: текстовый запрос (описание проекта / раздела ТЗ);
+#  - top_k: сколько фрагментов вернуть;
+#  - allowed_source_types: фильтр по типу источников
+#    (например, ["gost", "muiv"] или None для всех).
+#
+# Возвращает:
+#  - список словарей с полями:
+#      chunk_id, doc_id, source_type, title, score, text
+# ============================================================
+
+def retrieve_chunks(
+    query_text: str,
+    top_k: int = 5,
+    allowed_source_types: List[str] | None = None,
+) -> List[Dict[str, Any]]:
+    """
+    Ищет наиболее релевантные чанки для заданного текстового запроса.
+    Можно ограничить поиск по типу источников (gost, muiv, web_example).
+
+    Возвращает список чанков с метаданными и оценкой сходства (score).
+    """
+    if not query_text.strip():
+        raise ValueError("Пустой запрос: query_text не должен быть пустым.")
+
+    # Векторизуем запрос (одна строка)
+    query_vec = tfidf_vectorizer.transform([query_text])
+
+    # Вычисляем косинусное сходство запрос↔все чанки
+    similarities = cosine_similarity(query_vec, tfidf_matrix)[0]  # shape: (n_chunks,)
+
+    # Если задан фильтр по типу источников — отбрасываем лишние
+    if allowed_source_types is not None:
+        allowed_source_types_set = set(allowed_source_types)
+        # Заменяем сходство на -1 для чанков с неподходящим source_type
+        for i, ch in enumerate(corpus_chunks):
+            if ch["source_type"] not in allowed_source_types_set:
+                similarities[i] = -1.0
+
+    # Находим индексы top_k чанков по убыванию сходства
+    # argsort даёт индексы по возрастанию, поэтому переворачиваем
+    top_k = max(1, min(top_k, len(corpus_chunks)))
+    top_indices = similarities.argsort()[::-1][:top_k]
+
+    results: List[Dict[str, Any]] = []
+
+    for idx in top_indices:
+        score = float(similarities[idx])
+        ch = corpus_chunks[idx]
+        results.append(
+            {
+                "chunk_id": ch["chunk_id"],
+                "doc_id": ch["doc_id"],
+                "source_type": ch["source_type"],
+                "title": ch["title"],
+                "url": ch.get("url", ""),
+                "chunk_index": ch["chunk_index"],
+                "score": score,
+                "text": ch["text"],
+            }
+        )
+
+    return results
