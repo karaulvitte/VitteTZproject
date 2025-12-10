@@ -264,3 +264,44 @@ def google_custom_search(query: str, num_results: int = 5) -> List[Dict[str, Any
 
     print(f"[GoogleSearch] Найдено результатов: {len(results)}")
     return results
+
+# ============================================================
+# Здесь мы формируем несколько поисковых запросов, связанных с ТЗ
+# на автоматизированные системы, и собираем результаты (URL + заголовок).
+# ============================================================
+
+search_queries = [
+    '"техническое задание" "автоматизированная система" "ГОСТ 19.201"',
+    '"техническое задание" "информационная система" вуз',
+    '"техническое задание" разработка программного обеспечения ГОСТ',
+]
+
+web_search_results: List[Dict[str, Any]] = []
+
+for q in search_queries:
+    results = google_custom_search(q, num_results=5)
+    web_search_results.extend(
+        {
+            "query": q,
+            "title": item["title"],
+            "link": item["link"],
+        }
+        for item in results
+    )
+
+# Уберем дубли по ссылкам
+seen_links = set()
+unique_web_search_results = []
+for item in web_search_results:
+    if item["link"] in seen_links:
+        continue
+    seen_links.add(item["link"])
+    unique_web_search_results.append(item)
+
+web_search_results = unique_web_search_results
+
+print("\nИтоговый список найденных ссылок:")
+for idx, item in enumerate(web_search_results, start=1):
+    print(f"{idx:2d}. {item['title']}\n    {item['link']}")
+
+print("\nВсего уникальных ссылок:", len(web_search_results))
