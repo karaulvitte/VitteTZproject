@@ -356,3 +356,39 @@ def fetch_and_extract_text(url: str, timeout: int = 15) -> str:
     except Exception as e:
         print(f"[Fetch] Ошибка при парсинге HTML: {e}")
         return ""
+
+# ============================================================
+# Результат: список словарей web_docs:
+#  {
+#    "id": ...,
+#    "source_type": "web_example",
+#    "title": ...,
+#    "url": ...,
+#    "text": <извлечённый текст>
+#  }
+# Этот список позже будет участвовать в формировании корпуса RAG.
+# ============================================================
+
+web_docs: List[Dict[str, Any]] = []
+
+for idx, item in enumerate(web_search_results, start=1):
+    url = item["link"]
+    title = item["title"]
+
+    text = fetch_and_extract_text(url)
+    if not text:
+        print(f"[WebDoc] Пустой текст, пропускаем: {url}")
+        continue
+
+    doc = {
+        "id": f"web_example_{idx}",
+        "source_type": "web_example",
+        "title": title,
+        "url": url,
+        "text": text,
+    }
+    web_docs.append(doc)
+
+print("\nКоличество успешно загруженных веб-документов:", len(web_docs))
+for doc in web_docs:
+    print(f"- {doc['id']}: {doc['title']}")
