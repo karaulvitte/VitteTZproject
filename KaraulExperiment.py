@@ -211,3 +211,56 @@ local_docs = [
 print(f"Количество локальных документов: {len(local_docs)}")
 for doc in local_docs:
     print(f"- {doc['id']}: {doc['title']} (тип: {doc['source_type']})")
+
+# ============================================================
+# Используем тестовые KEY и SEARCH_ENGINE_ID (cx), заданные ранее.
+# Функция принимает текстовый запрос и возвращает список результатов
+# (title + link). Дальше ссылки будем использовать для загрузки HTML.
+# ============================================================
+
+def google_custom_search(query: str, num_results: int = 5) -> List[Dict[str, Any]]:
+    """
+    Выполняет поиск через Google Custom Search API и возвращает
+    список результатов в виде словарей:
+    {
+        "title": <заголовок>,
+        "link": <URL>
+    }
+    """
+    endpoint = "https://www.googleapis.com/customsearch/v1"
+
+    params = {
+        "key": GOOGLE_API_KEY,
+        "cx": SEARCH_ENGINE_ID,
+        "q": query,
+        "num": min(max(num_results, 1), 10),  # ограничение API: максимум 10 за раз
+        "hl": "ru",  # русский интерфейс/результаты, где возможно
+    }
+
+    print(f"[GoogleSearch] Запрос: {query!r}")
+
+    try:
+        response = requests.get(endpoint, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        print(f"[GoogleSearch] Ошибка при запросе: {e}")
+        return []
+
+    items = data.get("items", []) or []
+    results: List[Dict[str, Any]] = []
+
+    for item in items:
+        title = item.get("title") or ""
+        link = item.get("link") or ""
+        if not link:
+            continue
+        results.append(
+            {
+                "title": title,
+                "link": link,
+            }
+        )
+
+    print(f"[GoogleSearch] Найдено результатов: {len(results)}")
+    return results
