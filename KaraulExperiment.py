@@ -926,3 +926,122 @@ def build_user_prompt_for_tz_section(
         base_prompt += "\n\nДополнительные требования:\n" + extra_instructions
 
     return base_prompt
+
+# ============================================================
+# Возвращает словарь с:
+#  - project_id, section_name, mode, model_name, text, used_chunks.
+# ============================================================
+
+def generate_tz_section(
+    project: Dict[str, Any],
+    section_name: str,
+    mode: str = "baseline",
+    model_name: Optional[str] = None,
+    top_k_chunks: int = 8,
+) -> Dict[str, Any]:
+    """
+    Генерирует текст раздела ТЗ для заданного проекта и режима работы.
+
+    Параметры:
+    - project: словарь из test_projects;
+    - section_name: строка, название раздела ТЗ;
+    - mode:
+        * 'baseline'  — без использования RAG;
+        * 'rag_gost'  — использовать только чанки из ГОСТ (source_type='gost');
+        * 'rag_full'  — использовать весь корпус (gost + muiv + web_example);
+    - model_name: имя модели Proxy API (если None — DEFAULT_LLM_MODEL);
+    - top_k_chunks: сколько фрагментов подставлять в контекст.
+
+    Результат:
+    - словарь с ключами:
+        project_id, section_name, mode, model_name, text, used_chunks (список chunk_id).
+    """
+    project_id = project.get("id", "unknown_project")
+
+    # 1. Определяем, какие источники использовать для RAG
+    allowed_source_types = None
+    if mode == "rag_gost":
+        allowed_source_types = ["gost"]
+    elif mode == "rag_full":
+        allowed_source_types = None  # все источники
+    elif mode == "baseline":
+        allowed_source_types = None
+    else:
+        raise ValueError(f"Неизвестный режим mode={mode!r}")
+
+    # 2. Подбор релевантного контекста (если не baseline)
+    retrieved_chunks: List[Dict[str, Any]] = []
+
+    if mode in ("rag_gost", "rag_full"):
+        # Формируем запрос для поиска: описание проекта + название раздела
+        query_text = (
+            f"{project.get('description', '')}\n"
+            f"Раздел ТЗ: {section_name}.\n"
+            "Техническое задание на разработку информационной системы."
+        )
+
+        retrieved_chunks = retrieve_chunks(
+            query_text=query_text,
+            top_k=top_k_chunks,
+            allowed_source_types=allowed_source_types,
+        )
+
+    # 3. Строим системный и пользовательский промпты
+    system_prompt = build_system_prompt_for_tz_section()
+
+    base_user_prompt = build_user_prompt_for_tz_section(
+        project=project,
+        section_name=section_name,
+        extra_instructions=None,
+    )
+
+    # 4. Добавляем контекст (если есть retriever-результаты)
+    if retrieved_chunks:
+        context_parts = []
+        for i, ch in enumerate(retrieved_chunks, start=1):
+            # Для экономии токенов можем слегка обрезать слишком длинные фрагменты
+            chunk_text = ch["text"]
+            if len(chunk_text) > 800:
+                chunk_text = chunk_text[:800] + "…"
+
+            context_parts.append(
+                f"[Фрагмент {i} | источник: {ch['source_type']} | документ: {ch['title']}]\n"
+                f"{chunk_text}"
+            )
+
+        context_block = "\n\n".join(context_parts)
+
+        user_prompt = (
+            base_user_prompt
+            + "\n\n--- Контекст (фрагменты из ГОСТ и связанных документов) ---\n"
+            + context_block
+            + "\n\nИспользуя приведённый контекст, сформируй связный и аккуратный текст "
+              "раздела ТЗ. При необходимости переформулируй фрагменты, не копируй их дословно."
+        )
+    else:
+        # Baseline или случай, когда retriever ничего не нашёл
+        user_prompt = (
+            base_user_prompt
+            + "\n\nКонтекст по ГОСТ и методическим материалам не подставляется. "
+              "Ориентируйся на общие требования к ТЗ в сфере разработки "
+              "информационных систем, но соблюдай структуру ГОСТ 19.201-78."
+        )
+
+    # 5. Вызываем модель
+    answer_text = llm_chat_completion(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model_name=model_name,
+        temperature=0.2,
+    )
+
+    result = {
+        "project_id": project_id,
+        "section_name": section_name,
+        "mode": mode,
+        "model_name": model_name or DEFAULT_LLM_MODEL,
+        "text": answer_text,
+        "used_chunks": [ch["chunk_id"] for ch in retrieved_chunks],
+    }
+
+    return result
