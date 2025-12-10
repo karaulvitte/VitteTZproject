@@ -765,3 +765,55 @@ def retrieve_chunks(
         )
 
     return results
+
+# ============================================================
+# Проверяем три сценария:
+#  1) Поиск только по ГОСТ (RAG-GOST);
+#  2) Поиск по ГОСТ + методическим материалам (локальный контекст);
+#  3) Поиск по всему корпусу (включая web_example).
+# ============================================================
+
+test_query = (
+    "Техническое задание на разработку системы учета сотрудников "
+    "в университете, требуется описать назначение системы и основные функции."
+)
+
+print("Тестовый запрос:")
+print(test_query)
+print("\n--- Только ГОСТ (source_type=['gost']) ---")
+
+results_gost = retrieve_chunks(
+    query_text=test_query,
+    top_k=5,
+    allowed_source_types=["gost"],
+)
+
+for r in results_gost:
+    print(f"\n[{r['source_type']}] {r['title']} (score={r['score']:.3f})")
+    print(r["text"][:300], "...")
+
+
+print("\n\n--- ГОСТ + методички (source_type=['gost', 'muiv']) ---")
+
+results_local = retrieve_chunks(
+    query_text=test_query,
+    top_k=5,
+    allowed_source_types=["gost", "muiv"],
+)
+
+for r in results_local:
+    print(f"\n[{r['source_type']}] {r['title']} (score={r['score']:.3f})")
+    print(r["text"][:300], "...")
+
+
+print("\n\n--- Весь корпус (без фильтра по типу) ---")
+
+results_full = retrieve_chunks(
+    query_text=test_query,
+    top_k=5,
+    allowed_source_types=None,  # None = все источники
+)
+
+for r in results_full:
+    print(f"\n[{r['source_type']}] {r['title']} (score={r['score']:.3f})")
+    print(r["text"][:300], "...")
