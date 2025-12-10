@@ -648,3 +648,28 @@ df_chunks = pd.DataFrame(
 )
 
 df_chunks.head()
+
+# ============================================================
+# Форматы:
+#  - JSONL (по строке на чанк) — удобно читать по одному объекту;
+#  - CSV — удобно смотреть в табличном виде.
+# Эти файлы потом можно использовать во Flask-приложении.
+# ============================================================
+
+output_dir = Path("rag_corpus")
+output_dir.mkdir(exist_ok=True)
+
+jsonl_path = output_dir / "rag_corpus_chunks.jsonl"
+csv_path = output_dir / "rag_corpus_chunks.csv"
+
+# Сохранение JSONL
+with jsonl_path.open("w", encoding="utf-8") as f:
+    for ch in corpus_chunks:
+        f.write(json.dumps(ch, ensure_ascii=False) + "\n")
+
+# Сохранение CSV
+df_chunks.to_csv(csv_path, index=False, encoding="utf-8")
+
+print("Корпус чанков сохранён:")
+print(" - JSONL:", jsonl_path)
+print(" - CSV:   ", csv_path)
