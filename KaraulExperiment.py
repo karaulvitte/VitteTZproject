@@ -673,3 +673,30 @@ df_chunks.to_csv(csv_path, index=False, encoding="utf-8")
 print("Корпус чанков сохранён:")
 print(" - JSONL:", jsonl_path)
 print(" - CSV:   ", csv_path)
+
+# ============================================================
+# Используем sklearn.TfidfVectorizer:
+#  - каждый чанк (fragment) превращаем в TF–IDF-вектор;
+#  - затем сможем быстро вычислять косинусное сходство с запросами.
+# ============================================================
+
+# Собираем тексты чанков в список в том же порядке, в котором они
+# хранятся в corpus_chunks. Индекс в этом списке будет совпадать
+# с индексом строки в TF–IDF-матрице.
+chunk_texts: List[str] = [ch["text"] for ch in corpus_chunks]
+
+print("Количество чанков для TF–IDF:", len(chunk_texts))
+
+# Настройка TF–IDF-векторизатора
+# Параметры можно тюнить:
+#  - max_features ограничивает словарь (для контроля памяти);
+#  - ngram_range=(1, 2) учитывает униграммы и биграммы.
+tfidf_vectorizer = TfidfVectorizer(
+    max_features=5000,
+    ngram_range=(1, 2),
+)
+
+# Обучение векторизатора на корпусе и получение матрицы признаков
+tfidf_matrix = tfidf_vectorizer.fit_transform(chunk_texts)
+
+print("Форма TF–IDF-матрицы:", tfidf_matrix.shape)
