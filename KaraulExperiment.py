@@ -501,3 +501,78 @@ for doc in all_source_docs[:3]:
     print(f"\nДокумент {doc['id']} ({doc['source_type']}):")
     print("Исходный размер текста:", len(doc["text"]))
     print("Похоже на мусор?:", looks_like_broken_or_binary(doc["text"]))
+
+# ============================================================
+# Стратегия:
+#  - сначала делим текст по абзацам (по переводу строк);
+#  - затем собираем абзацы в чанки так, чтобы
+#    длина по символам была в разумных пределах.
+# ============================================================
+
+from typing import Tuple
+
+def split_text_into_chunks(
+    text: str,
+    max_chars: int = 800,
+    min_chars: int = 300,
+) -> List[str]:
+    """
+    Разбивает нормализованный текст на чанки длиной от min_chars до max_chars.
+    Чанки формируются из абзацев (строк), чтобы не резать текст посередине фраз.
+    """
+    if not text:
+        return []
+
+    paragraphs = text.split("\n")
+    chunks: List[str] = []
+    current_chunk_lines: List[str] = []
+    current_len = 0
+
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+
+        # +1 за потенциальный перевод строки
+        added_len = len(para) + (1 if current_chunk_lines else 0)
+
+        if current_len + added_len <= max_chars:
+            # Просто добавляем абзац в текущий чанк
+            current_chunk_lines.append(para)
+            current_len += added_len
+        else:
+            # Если текущий чанк достаточно длинный — сохраняем его
+            if current_chunk_lines and current_len >= min_chars:
+                chunks.append("\n".join(current_chunk_lines))
+                current_chunk_lines = [para]
+                current_len = len(para)
+            else:
+                # Иначе пытаемся всё равно добить текущий чанк
+                # (может он совсем пустой/короткий)
+                if current_chunk_lines:
+                    chunks.append("\n".join(current_chunk_lines))
+                current_chunk_lines = [para]
+                current_len = len(para)
+
+    # Добавляем последний чанк, если он не пустой
+    if current_chunk_lines:
+        chunk_text = "\n".join(current_chunk_lines)
+        # Если последний чанк совсем крошечный, можно попробовать
+        # слить его с предыдущим — здесь для простоты просто сохраняем.
+        chunks.append(chunk_text)
+
+    # На всякий случай убираем совсем маленькие кусочки
+    chunks = [c for c in chunks if len(c) >= 100]
+
+    return chunks
+
+
+# Небольшая проверка на локальных документах
+for doc in local_docs:
+    norm = normalize_text(doc["text"])
+    small_chunks = split_text_into_chunks(norm)
+    print(f"\nДокумент {doc['id']}:")
+    print("  Нормализованный размер:", len(norm))
+    print("  Число чанков:", len(small_chunks))
+    if small_chunks:
+        print("  Пример чанка:\n", small_chunks[0][:200], "...")
