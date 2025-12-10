@@ -305,3 +305,54 @@ for idx, item in enumerate(web_search_results, start=1):
     print(f"{idx:2d}. {item['title']}\n    {item['link']}")
 
 print("\nВсего уникальных ссылок:", len(web_search_results))
+
+# ============================================================
+# Используем BeautifulSoup:
+#  - удаляем <script>, <style> и подобные элементы;
+#  - получаем текст из <body> (или всего документа, если нужно);
+#  - приводим пробелы к аккуратному виду.
+# ============================================================
+
+def fetch_and_extract_text(url: str, timeout: int = 15) -> str:
+    """
+    Загружает HTML-страницу по URL и извлекает из неё текстовое содержимое.
+    Возвращает строку (возможно, довольно длинную).
+    При ошибках возвращает пустую строку.
+    """
+    print(f"[Fetch] Загружаем: {url}")
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+
+        # Пытаемся угадать кодировку, если не указана
+        if not resp.encoding:
+            resp.encoding = resp.apparent_encoding
+
+        html = resp.text
+    except Exception as e:
+        print(f"[Fetch] Ошибка при загрузке страницы: {e}")
+        return ""
+
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Удаляем скрипты, стили и подобное "мусорное" содержимое
+        for tag in soup(["script", "style", "noscript", "header", "footer", "nav"]):
+            tag.decompose()
+
+        # Пытаемся взять текст из <body>, если он есть
+        body = soup.body
+        if body is not None:
+            text = body.get_text(separator="\n")
+        else:
+            text = soup.get_text(separator="\n")
+
+        # Нормализуем пробелы и пустые строки
+        lines = [line.strip() for line in text.splitlines()]
+        lines = [line for line in lines if line]  # убираем пустые строки
+        cleaned_text = "\n".join(lines)
+
+        return cleaned_text
+    except Exception as e:
+        print(f"[Fetch] Ошибка при парсинге HTML: {e}")
+        return ""
