@@ -392,3 +392,37 @@ for idx, item in enumerate(web_search_results, start=1):
 print("\nКоличество успешно загруженных веб-документов:", len(web_docs))
 for doc in web_docs:
     print(f"- {doc['id']}: {doc['title']}")
+
+# ============================================================
+# Объединяем локальные документы и веб-документы в единый список.
+# На следующем шаге (в блоке 4) будем:
+#  - нормализовать текст;
+#  - разбивать его на фрагменты (chunks);
+#  - формировать RAG-файлы.
+# ============================================================
+
+all_source_docs: List[Dict[str, Any]] = []
+
+# Добавляем локальные документы (ГОСТ + методички)
+all_source_docs.extend(local_docs)
+
+# Добавляем веб-документы (примерные ТЗ)
+all_source_docs.extend(web_docs)
+
+print("Итоговое количество документов в корпусе:", len(all_source_docs))
+
+# Для удобства можно посмотреть короткую табличку
+df_sources = pd.DataFrame(
+    [
+        {
+            "id": doc["id"],
+            "source_type": doc["source_type"],
+            "title": doc.get("title", ""),
+            "url": doc.get("url", ""),
+            "text_preview": (doc["text"][:200] + "…") if len(doc["text"]) > 200 else doc["text"],
+        }
+        for doc in all_source_docs
+    ]
+)
+
+df_sources
