@@ -426,3 +426,78 @@ df_sources = pd.DataFrame(
 )
 
 df_sources
+
+# ============================================================
+# Мы НЕ делаем сложную NLP-очистку, только:
+#  - убираем лишние пробелы и пустые строки;
+#  - фильтруем заведомо мусорные случаи.
+# ============================================================
+
+import re
+
+def looks_like_broken_or_binary(text: str) -> bool:
+    """
+    Простая эвристика: пытаемся понять, что текст выглядит как
+    бинарный мусор (обрывок PDF, неправильная кодировка и т.п.).
+    Возвращает True, если текст стоит отбросить полностью.
+    """
+    if not text:
+        return True
+
+    stripped = text.lstrip()
+
+    # Явный признак PDF-файла
+    if stripped.startswith("%PDF-"):
+        return True
+
+    # Частый паттерн "сломанной" кириллицы (Ð, Ñ и т.п.)
+    # Если в первых 200 символах много таких символов — считаем мусором.
+    prefix = stripped[:200]
+    broken_chars = sum(ch in "ÐÑ�" for ch in prefix)
+    if broken_chars > 10:  # порог подбираем грубо
+        return True
+
+    # Если текст почти целиком состоит из небуквенно-цифровых символов
+    sample = stripped[:500]
+    if sample:
+        alpha_num = sum(ch.isalnum() for ch in sample)
+        if alpha_num / len(sample) < 0.2:
+            return True
+
+    return False
+
+
+def normalize_text(text: str) -> str:
+    """
+    Нормализует текст:
+    - убирает лишние пробелы и пустые строки;
+    - заменяет последовательности пробелов на один пробел внутри строк.
+    """
+    if not text:
+        return ""
+
+    # Унифицируем переводы строк
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Разбиваем на строки, чистим каждую
+    lines = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # Заменяем множественные пробелы на один
+        line = re.sub(r"\s+", " ", line)
+        if line:
+            lines.append(line)
+
+    # Собираем обратно с переводами строк
+    cleaned = "\n".join(lines)
+
+    return cleaned
+
+
+# Проверочный пример (по желанию)
+for doc in all_source_docs[:3]:
+    print(f"\nДокумент {doc['id']} ({doc['source_type']}):")
+    print("Исходный размер текста:", len(doc["text"]))
+    print("Похоже на мусор?:", looks_like_broken_or_binary(doc["text"]))
