@@ -817,3 +817,55 @@ results_full = retrieve_chunks(
 for r in results_full:
     print(f"\n[{r['source_type']}] {r['title']} (score={r['score']:.3f})")
     print(r["text"][:300], "...")
+
+# ============================================================
+# Функция llm_chat_completion:
+#  - принимает системный промпт, текст пользователя и имя модели;
+#  - возвращает текст ответа ассимистента;
+#  - при ошибках печатает сообщение и возвращает заглушку.
+# ============================================================
+
+from typing import Optional
+
+def llm_chat_completion(
+    system_prompt: str,
+    user_prompt: str,
+    model_name: Optional[str] = None,
+    temperature: float = 0.2,
+    max_tokens: int = 1500,
+) -> str:
+    """
+    Вызывает LLM через Proxy API ChatGPT и возвращает текст ответа.
+
+    Параметры:
+    - system_prompt: роль и стиль модели (инструкции эксперту по ГОСТ);
+    - user_prompt: задание пользователя (описание проекта + раздел ТЗ);
+    - model_name: имя модели (если None, используется DEFAULT_LLM_MODEL);
+    - temperature: "креативность" ответа;
+    - max_tokens: ограничение на длину ответа (если поддерживается API).
+    """
+    if model_name is None:
+        model_name = DEFAULT_LLM_MODEL
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        response = llm_client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            temperature=temperature,
+            # max_tokens здесь может игнорироваться конкретной моделью,
+            # но мы оставляем параметр как подсказку.
+        )
+        # Для OpenAI-совместимого API предполагаем такой интерфейс:
+        answer = response.choices[0].message.content
+        return answer
+    except Exception as e:
+        print(f"[LLM ERROR] Ошибка при вызове модели: {e}")
+        return (
+            "Не удалось получить ответ от модели. "
+            "Проверьте настройки Proxy API и повторите попытку."
+        )
