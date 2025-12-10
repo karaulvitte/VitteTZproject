@@ -576,3 +576,75 @@ for doc in local_docs:
     print("  Число чанков:", len(small_chunks))
     if small_chunks:
         print("  Пример чанка:\n", small_chunks[0][:200], "...")
+
+# ============================================================
+# Для каждого исходного документа:
+#   1) проверяем, не является ли он "битым";
+#   2) нормализуем текст;
+#   3) разбиваем на чанки;
+#   4) для каждого чанка создаём запись с метаданными.
+# ============================================================
+
+corpus_chunks: List[Dict[str, Any]] = []
+chunk_id_counter = 0
+
+for doc in all_source_docs:
+    doc_id = doc["id"]
+    source_type = doc["source_type"]
+    title = doc.get("title", "")
+    url = doc.get("url", "")
+
+    raw_text = doc["text"]
+
+    # Фильтр "битых" документов
+    if looks_like_broken_or_binary(raw_text):
+        print(f"[CHUNKS] Документ {doc_id} ({source_type}) отфильтрован как мусор.")
+        continue
+
+    # Нормализация
+    normalized = normalize_text(raw_text)
+
+    # Если после нормализации текст слишком короткий — пропускаем
+    if len(normalized) < 200:
+        print(f"[CHUNKS] Документ {doc_id} ({source_type}) слишком короткий после очистки, пропускаем.")
+        continue
+
+    # Разбиение на чанки
+    chunks = split_text_into_chunks(normalized, max_chars=800, min_chars=300)
+
+    if not chunks:
+        print(f"[CHUNKS] Для документа {doc_id} ({source_type}) не удалось сформировать чанки.")
+        continue
+
+    for idx, chunk_text in enumerate(chunks):
+        chunk_id_counter += 1
+        corpus_chunks.append(
+            {
+                "chunk_id": f"chunk_{chunk_id_counter}",
+                "doc_id": doc_id,
+                "source_type": source_type,
+                "title": title,
+                "url": url,
+                "chunk_index": idx,
+                "text": chunk_text,
+            }
+        )
+
+print("\nИтоговое количество чанков в корпусе:", len(corpus_chunks))
+
+# Сводный DataFrame по чанкам
+df_chunks = pd.DataFrame(
+    [
+        {
+            "chunk_id": ch["chunk_id"],
+            "doc_id": ch["doc_id"],
+            "source_type": ch["source_type"],
+            "title": ch["title"],
+            "chunk_index": ch["chunk_index"],
+            "text_preview": (ch["text"][:200] + "…") if len(ch["text"]) > 200 else ch["text"],
+        }
+        for ch in corpus_chunks
+    ]
+)
+
+df_chunks.head()
